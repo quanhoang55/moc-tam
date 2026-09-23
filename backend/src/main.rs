@@ -39,14 +39,12 @@ async fn main() -> Result<(), std::io::Error> {
     //    real values, otherwise a [MOCK EMAIL] stdout fallback.
     let email_config = EmailConfig::from_settings(&settings);
     if email_config.is_enabled() {
-        println!(
-            "Email: SMTP enabled → {}:{}",
-            email_config.server(),
-            email_config.port()
-        );
+        println!("Email: Resend API enabled");
     } else {
         println!(
-            "[MOCK EMAIL] SMTP not configured (SMTP_PASSWORD / SENDER_EMAIL placeholder) — thank-you emails will be logged to stdout"
+            "[MOCK EMAIL] Resend API not configured \
+             (RESEND_API_KEY / SENDER_EMAIL placeholder) — \
+             thank-you emails will be logged to stdout"
         );
     }
     let email_config_data = web::Data::new(email_config);

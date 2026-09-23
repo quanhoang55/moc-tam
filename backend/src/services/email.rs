@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 // =============================================================
 // PURPOSE: Post-purchase email (SMTP / Resend) with mock fallback
 //
@@ -9,32 +7,21 @@ use std::time::Duration;
 // `[MOCK EMAIL] ...` line to stdout and returns `Ok(())`.
 // =============================================================
 use crate::config::{Settings, is_placeholder};
-use lettre::Message;
-use lettre::Transport;
-use lettre::transport::smtp::SmtpTransport;
-use lettre::transport::smtp::authentication::Credentials;
-
+use serde::Serialize;
 #[derive(Debug, Clone)]
 pub struct EmailConfig {
-    server: String,
-    port: u16,
-    username: String,
-    password: String,
+    resend_api_key: String,
     sender: String,
-    /// False while credentials are missing or placeholders.
     enabled: bool,
 }
 
 impl EmailConfig {
     pub fn from_settings(settings: &Settings) -> Self {
         let enabled =
-            !is_placeholder(&settings.smtp_password) && !is_placeholder(&settings.sender_email);
+            !is_placeholder(&settings.resend_api_key) && !is_placeholder(&settings.sender_email);
 
         Self {
-            server: settings.smtp_server.clone(),
-            port: settings.smtp_port,
-            username: settings.smtp_username.clone(),
-            password: settings.smtp_password.clone(),
+            resend_api_key: settings.resend_api_key.clone(),
             sender: settings.sender_email.clone(),
             enabled,
         }
@@ -42,14 +29,6 @@ impl EmailConfig {
 
     pub fn is_enabled(&self) -> bool {
         self.enabled
-    }
-
-    pub fn server(&self) -> &str {
-        &self.server
-    }
-
-    pub fn port(&self) -> u16 {
-        self.port
     }
 }
 
@@ -79,6 +58,13 @@ pub(crate) fn thank_you_body(
 /// Send the thank-you email. Degrades to a stdout mock when SMTP is not
 /// configured. Always returns `Ok(())` in mock mode so the checkout flow
 /// never fails because of email delivery.
+#[derive(Debug, Serialize)]
+struct ResendEmailRequest {
+    from: String,
+    to: Vec<String>,
+    subject: String,
+    text: String,
+}
 pub async fn send_thank_you_email(
     config: &EmailConfig,
     to: &str,
@@ -94,60 +80,39 @@ pub async fn send_thank_you_email(
         return Ok(());
     }
 
-    let support = config.sender.clone();
     let subject = thank_you_subject(order_id);
-    let body = thank_you_body(order_id, amount, currency, &support);
+    let body = thank_you_body(order_id, amount, currency, &config.sender);
 
-    // Owned copies for the 'static spawn_blocking closure.
-    let to = to.to_owned();
-    let order_id = order_id.to_owned();
+    let request = ResendEmailRequest {
+        from: config.sender.clone(),
+        to: vec![to.to_owned()],
+        subject,
+        text: body,
+    };
 
-    let message = Message::builder()
-        .from(
-            config
-                .sender
-                .parse()
-                .map_err(|error| format!("Invalid SENDER_EMAIL `{}`: {error}", config.sender))?,
-        )
-        .to(to
-            .parse()
-            .map_err(|error| format!("Invalid recipient email `{to}`: {error}"))?)
-        .subject(subject)
-        .body(body)
-        .map_err(|error| format!("Failed to build email message: {error}"))?;
+    let client = reqwest::Client::new();
 
-    let server = config.server.clone();
-    let port = config.port;
-    let username = config.username.clone();
-    let password = config.password.clone();
+    let response = client
+        .post("https://api.resend.com/emails")
+        .bearer_auth(&config.resend_api_key)
+        .json(&request)
+        .send()
+        .await
+        .map_err(|error| format!("Resend API request failed: {error}"))?;
 
-    // SMTP blocking I/O runs off the async runtime.
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let transport = if port == 465 {
-            SmtpTransport::relay(&server)
-                .map_err(|error| format!("SMTP setup failed: {error}"))?
-                .port(port)
-                .credentials(Credentials::new(username, password))
-                .timeout(Some(Duration::from_secs(15)))
-                .build()
-        } else {
-            SmtpTransport::starttls_relay(&server)
-                .map_err(|error| format!("SMTP setup failed: {error}"))?
-                .port(port)
-                .credentials(Credentials::new(username, password))
-                .timeout(Some(Duration::from_secs(15)))
-                .build()
-        };
+    let status = response.status();
+    let response_body = response
+        .text()
+        .await
+        .map_err(|error| format!("Failed to read Resend response: {error}"))?;
 
-        transport
-            .send(&message)
-            .map_err(|error| format!("SMTP send failed: {error}"))?;
+    if !status.is_success() {
+        return Err(format!("Resend API returned {status}: {response_body}"));
+    }
 
-        println!("[EMAIL] Thank-you email sent to {to} (Order #{order_id})");
-        Ok(())
-    })
-    .await
-    .map_err(|error| format!("Email task failed: {error}"))?
+    println!("[EMAIL] Thank-you email sent to {to} (Order #{order_id})");
+
+    Ok(())
 }
 
 #[cfg(test)]
