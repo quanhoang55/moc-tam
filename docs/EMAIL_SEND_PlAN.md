@@ -71,6 +71,8 @@ SMTP_PORT=587
 SMTP_USERNAME=resend
 SMTP_PASSWORD=your_email_api_key_here
 SENDER_EMAIL=noreply@yourdomain.com
+# Development-only UI test button; leave false/unset in production.
+ENABLE_EMAIL_TEST_ENDPOINT=true
 
 Required API Endpoints
 
@@ -103,6 +105,21 @@ Action: Captures payment, verifies "COMPLETED" status, updates DB, triggers asyn
 ### POST /api/webhooks/paypal (Optional / Production)
 
 Action: Verifies PayPal Signature header, extracts event PAYMENT.CAPTURE.COMPLETED, updates DB, and triggers email service asynchronously.
+
+### POST /api/email/test (Development / manual SMTP test)
+
+Request payload:
+
+```json
+{
+    "email": "user@example.com"
+}
+```
+
+Action: Sends the existing thank-you email directly to the supplied address,
+without creating a PayPal order. The endpoint is available only when
+`ENABLE_EMAIL_TEST_ENDPOINT=true` and SMTP is configured. The checkout drawer
+shows a **Send test email** button after a valid email is entered.
 
 ## 5. Thank-You Email Template Specification
 
