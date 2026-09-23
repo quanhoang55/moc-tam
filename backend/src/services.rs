@@ -48,6 +48,11 @@ pub struct CaptureOrderRequest {
     pub paypal_order_id: String,
 }
 
+#[derive(Deserialize)]
+pub struct SendTestEmailRequest {
+    pub email: String,
+}
+
 #[derive(Serialize)]
 pub struct CaptureOrderResponse {
     pub status: &'static str,
@@ -57,6 +62,12 @@ pub struct CaptureOrderResponse {
 
 #[derive(Serialize)]
 struct ErrorResponse {
+    status: &'static str,
+    message: String,
+}
+
+#[derive(Serialize)]
+struct SendTestEmailResponse {
     status: &'static str,
     message: String,
 }
@@ -150,6 +161,55 @@ async fn complete_order_and_queue_email(
 // =============================================================
 // ENDPOINTS
 // =============================================================
+
+/// Deliver a real email without creating a PayPal order. This is intentionally
+/// opt-in through ENABLE_EMAIL_TEST_ENDPOINT to avoid exposing an open relay.
+#[post("/api/email/test")]
+pub async fn send_test_email(
+    req: web::Json<SendTestEmailRequest>,
+    email_config: web::Data<EmailConfig>,
+    settings: web::Data<Settings>,
+) -> impl Responder {
+    if !settings.enable_email_test_endpoint {
+        return error_response(
+            actix_web::http::StatusCode::FORBIDDEN,
+            "Email testing is disabled. Set ENABLE_EMAIL_TEST_ENDPOINT=true to enable it.",
+        );
+    }
+
+    if !email_config.is_enabled() {
+        return error_response(
+            actix_web::http::StatusCode::SERVICE_UNAVAILABLE,
+            "SMTP is not configured, so no real test email can be sent.",
+        );
+    }
+
+    let recipient = req.email.trim();
+    if !is_valid_email(recipient) {
+        return error_response(
+            actix_web::http::StatusCode::BAD_REQUEST,
+            "Please provide a valid email address.",
+        );
+    }
+
+    let test_order_id = format!("TEST-{}", chrono::Utc::now().format("%Y%m%d%H%M%S"));
+    match email::send_thank_you_email(&email_config, recipient, &test_order_id, 0.0, "USD").await {
+        Ok(()) => {
+            println!("[EMAIL TEST] email sent to {recipient} (Order #{test_order_id})");
+            HttpResponse::Ok().json(SendTestEmailResponse {
+                status: "success",
+                message: "Test email sent. Please check your inbox.".to_owned(),
+            })
+        }
+        Err(error) => {
+            eprintln!("[EMAIL TEST] failed for {recipient}: {error}");
+            error_response(
+                actix_web::http::StatusCode::BAD_GATEWAY,
+                "Unable to send the test email. Check the SMTP configuration and server logs.",
+            )
+        }
+    }
+}
 
 #[post("/api/orders/paypal/create")]
 pub async fn create_paypal_order(
