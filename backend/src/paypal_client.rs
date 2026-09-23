@@ -76,8 +76,13 @@ impl PayPalClient {
         }
     }
 
+    /// Base URL of the PayPal API for the configured mode.
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
     /// Retrieve the token from cache if valid, otherwise fetch a new one.
-    async fn get_access_token(&self) -> Result<String, String> {
+    pub(crate) async fn get_access_token(&self) -> Result<String, String> {
         // Read from cache first
         {
             let cache = self.token_cache.read().await;

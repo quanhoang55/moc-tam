@@ -6,8 +6,8 @@ const img = (name: string) => `/assets/images/${name}`;
 const traMocTam: Product = {
   id: "tra-moc-tam",
   name: "Four-Herb Raspberry Leaf Tea",
-  price: 29.99,
-  twoBoxPrice: 49.99,
+  price: 1,
+  twoBoxPrice: 2,
   rating: 4.8,
   reviews: 2143,
   cardImage: img("tra-moc-tam-hero.png"),
@@ -200,8 +200,8 @@ const traMocTam: Product = {
 const mamXoi: Product = {
   id: "mam-xoi",
   name: "Four-Herb Raspberry Leaf Tea",
-  price: 29.99,
-  twoBoxPrice: 49.99,
+  price: 1,
+  twoBoxPrice: 2,
   rating: 4.8,
   reviews: 2143,
   cardImage: img("tra-mam-xoi-1.jpg"),

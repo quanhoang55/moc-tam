@@ -4,6 +4,7 @@
 use crate::config::Settings;
 use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
 #[derive(Debug, Clone)]
 pub struct SupabaseClient {
@@ -24,6 +25,33 @@ pub struct FeedbackInsert {
 #[derive(Debug, Deserialize)]
 pub struct FeedbackRow {
     pub id: String,
+}
+
+/// A row of the `orders` table (see docs/ORDERS_TABLE.sql).
+#[derive(Debug, Serialize)]
+pub struct OrderInsert {
+    pub paypal_order_id: String,
+    pub customer_email: String,
+    pub total_amount: f64,
+    pub currency: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct OrderRow {
+    pub paypal_order_id: String,
+    pub customer_email: String,
+    pub total_amount: f64,
+    pub currency: Option<String>,
+    pub status: Option<String>,
+    pub email_sent: Option<bool>,
+}
+
+/// Columns needed by the email dispatch flow.
+const ORDER_COLUMNS: &str = "paypal_order_id,customer_email,total_amount,currency,status,email_sent";
+
+fn now_timestamp() -> String {
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
 impl SupabaseClient {
@@ -86,5 +114,108 @@ impl SupabaseClient {
             .next()
             .map(|row| row.id)
             .ok_or_else(|| "Supabase returned no row for the inserted feedback.".to_owned())
+    }
+
+    // ------------------------------------------------------------------
+    // Orders (PostgREST)
+    // ------------------------------------------------------------------
+
+    /// Store the initial PENDING order that links the customer email to the
+    /// PayPal order id.
+    pub async fn insert_order(&self, row: &OrderInsert) -> Result<(), String> {
+        let url = format!("{}/rest/v1/orders", self.base_url);
+
+        let response = self
+            .client
+            .post(&url)
+            .bearer_auth(&self.key)
+            .header("Prefer", "return=minimal")
+            .json(row)
+            .send()
+            .await
+            .map_err(|error| format!("Failed to reach Supabase: {error}"))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(format!("Supabase order insert failed ({status}): {error_text}"));
+        }
+
+        Ok(())
+    }
+
+    /// Update `status` (+ `updated_at`) for an order. Returns how many rows
+    /// were affected (0 means no matching order record).
+    pub async fn mark_order_status(
+        &self,
+        paypal_order_id: &str,
+        status: &str,
+    ) -> Result<usize, String> {
+        let url = format!(
+            "{}/rest/v1/orders?paypal_order_id=eq.{}",
+            self.base_url, paypal_order_id
+        );
+        let body = json!({ "status": status, "updated_at": now_timestamp() });
+
+        let response = self
+            .client
+            .patch(&url)
+            .bearer_auth(&self.key)
+            .header("Prefer", "return=representation")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|error| format!("Failed to reach Supabase: {error}"))?;
+
+        if !response.status().is_success() {
+            let status_code = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(format!(
+                "Supabase order update failed ({status_code}): {error_text}"
+            ));
+        }
+
+        let rows: Vec<Value> = response
+            .json()
+            .await
+            .map_err(|error| format!("Failed to parse Supabase response: {error}"))?;
+
+        Ok(rows.len())
+    }
+
+    /// Idempotency guard: flips `email_sent` from false to true and returns the
+    /// order row only for the caller that won the flip. Returns `None` when the
+    /// email was already sent (or no order record exists).
+    pub async fn claim_email_send(&self, paypal_order_id: &str) -> Result<Option<OrderRow>, String> {
+        let url = format!(
+            "{}/rest/v1/orders?paypal_order_id=eq.{}&email_sent=eq.false&select={}",
+            self.base_url, paypal_order_id, ORDER_COLUMNS
+        );
+        let body = json!({ "email_sent": true, "updated_at": now_timestamp() });
+
+        let response = self
+            .client
+            .patch(&url)
+            .bearer_auth(&self.key)
+            .header("Prefer", "return=representation")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|error| format!("Failed to reach Supabase: {error}"))?;
+
+        if !response.status().is_success() {
+            let status_code = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(format!(
+                "Supabase email claim failed ({status_code}): {error_text}"
+            ));
+        }
+
+        let rows: Vec<OrderRow> = response
+            .json()
+            .await
+            .map_err(|error| format!("Failed to parse Supabase response: {error}"))?;
+
+        Ok(rows.into_iter().next())
     }
 }

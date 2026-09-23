@@ -14,6 +14,8 @@ const CART_PAYMENTS: Array<[string, string]> = [
   ["visa", "Visa"],
 ];
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 interface CartDrawerProps {
   open: boolean;
   lines: CartLine[];
@@ -25,6 +27,10 @@ interface CartDrawerProps {
 
 export function CartDrawer({ open, lines, onClose, onQty, onRemove, onClear }: CartDrawerProps) {
   const [showPayment, setShowPayment] = useState(false);
+  const [checkoutEmail, setCheckoutEmail] = useState("");
+
+  const emailValid = EMAIL_PATTERN.test(checkoutEmail.trim());
+  const emailTouched = checkoutEmail.length > 0;
 
   const subtotal = lines.reduce((sum, line) => sum + line.price * line.qty, 0);
   const savings = lines.reduce((sum, line) => sum + (line.regular - line.price) * line.qty, 0);
@@ -116,18 +122,50 @@ export function CartDrawer({ open, lines, onClose, onQty, onRemove, onClear }: C
           </p>
           {showPayment && lines.length > 0 ? (
             <div className="cart-checkout">
-              <PayPalCheckoutButton
-                productId="cart"
-                onSuccess={() => {
-                  alert("Payment successful! Your order is being processed.");
-                  onClear();
-                  setShowPayment(false);
-                  onClose();
-                }}
-                onError={() => {
-                  alert("Payment failed, please try again later.");
-                }}
-              />
+              {/* Step 1: a valid email is required before PayPal renders. */}
+              <div className="checkout-email">
+                <label htmlFor="checkout-email-input">
+                  Email for your receipt &amp; order updates
+                </label>
+                <input
+                  id="checkout-email-input"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  value={checkoutEmail}
+                  onChange={(event) => setCheckoutEmail(event.target.value)}
+                  aria-invalid={emailTouched && !emailValid}
+                />
+                {emailTouched && !emailValid ? (
+                  <p className="checkout-email-error">
+                    Please enter a valid email address.
+                  </p>
+                ) : (
+                  <p className="checkout-email-note">
+                    Enter your email to continue to PayPal.
+                  </p>
+                )}
+              </div>
+              {/* Step 2: PayPal only mounts with a valid email + the live total. */}
+              {emailValid && (
+                <PayPalCheckoutButton
+                  email={checkoutEmail.trim()}
+                  amount={Number(subtotal.toFixed(2))}
+                  currency="USD"
+                  onSuccess={() => {
+                    alert(
+                      "Payment successful! A confirmation email is on its way.",
+                    );
+                    onClear();
+                    setShowPayment(false);
+                    onClose();
+                  }}
+                  onError={() => {
+                    alert("Payment failed, please try again later.");
+                  }}
+                />
+              )}
             </div>
           ) : (
             <button

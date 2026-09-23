@@ -35,16 +35,26 @@ export async function apiPost<T>(
   });
 
   const text = await response.text();
-  const data = (text ? JSON.parse(text) : null) as T;
+
+  // Tolerate non-JSON bodies (e.g. plain-text 500s) — never throw from parse.
+  let data: T | null = null;
+  if (text) {
+    try {
+      data = JSON.parse(text) as T;
+    } catch {
+      data = null;
+    }
+  }
 
   if (!response.ok) {
     const message =
       (data as { message?: string } | null)?.message ??
+      text ??
       `Request failed with status ${response.status}`;
-    throw new Error(message);
+    throw new Error(message || `Request failed with status ${response.status}`);
   }
 
-  return data;
+  return data as T;
 }
 
 function extraHeaders(init: RequestInit): Record<string, string> {

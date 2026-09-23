@@ -6,7 +6,8 @@ use actix_web::{App, HttpResponse, HttpServer, Responder, get, web};
 use backend::config::Settings;
 use backend::feedback::create_feedback;
 use backend::paypal_client::PayPalClient;
-use backend::services::{capture_paypal_order, create_paypal_order};
+use backend::services::email::EmailConfig;
+use backend::services::{capture_paypal_order, create_paypal_order, paypal_webhook};
 use backend::supabase_client::SupabaseClient;
 
 // =============================================================
@@ -32,9 +33,26 @@ async fn main() -> Result<(), std::io::Error> {
     let supabase_client = SupabaseClient::new(&settings);
     let supabase_client_data = web::Data::new(supabase_client);
 
+    // 4. Email sender: real SMTP as soon as SMTP_PASSWORD/SENDER_EMAIL hold
+    //    real values, otherwise a [MOCK EMAIL] stdout fallback.
+    let email_config = EmailConfig::from_settings(&settings);
+    if email_config.is_enabled() {
+        println!(
+            "Email: SMTP enabled → {}:{}",
+            email_config.server(),
+            email_config.port()
+        );
+    } else {
+        println!("[MOCK EMAIL] SMTP not configured (SMTP_PASSWORD / SENDER_EMAIL placeholder) — thank-you emails will be logged to stdout");
+    }
+    let email_config_data = web::Data::new(email_config);
+
+    // 5. Settings as app data (webhook verification reads PAYPAL_WEBHOOK_ID).
+    let settings_data = web::Data::new(settings.clone());
+
     println!("Starting Actix-web server on {}:{}", host, port);
 
-    // 4. Configure HTTP Server
+    // 6. Configure HTTP Server
     HttpServer::new(move || {
         let cors = Cors::permissive();
         App::new()
@@ -42,10 +60,13 @@ async fn main() -> Result<(), std::io::Error> {
             // Inject PayPal client into application state
             .app_data(paypal_client_data.clone())
             .app_data(supabase_client_data.clone())
+            .app_data(email_config_data.clone())
+            .app_data(settings_data.clone())
             // Register routes
             .service(check_root)
             .service(create_paypal_order)
             .service(capture_paypal_order)
+            .service(paypal_webhook)
             .service(create_feedback)
     })
     .bind((host, port))?

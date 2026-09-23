@@ -254,9 +254,12 @@ export function ProductScreen({ product, onAddToCart }: ProductScreenProps) {
                       <span className="offer-line">
                         <span className="offer-name">2 Boxes</span>
                       </span>
-                      <span className="offer-save">
-                        Save {money(product.price * 2 - product.twoBoxPrice)}
-                      </span>
+                      {/* Only when the bundle actually beats 2× single price. */}
+                      {product.price * 2 > product.twoBoxPrice && (
+                        <span className="offer-save">
+                          Save {money(product.price * 2 - product.twoBoxPrice)}
+                        </span>
+                      )}
                     </span>
                     <span className="offer-prices">
                       <strong>{money(product.twoBoxPrice)}</strong>
