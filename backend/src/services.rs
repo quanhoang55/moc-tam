@@ -4,7 +4,7 @@
 pub mod email;
 pub mod paypal;
 
-use actix_web::{HttpResponse, HttpRequest, Responder, post, web};
+use actix_web::{HttpRequest, HttpResponse, Responder, get, post, web};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::{Value, json};
@@ -124,9 +124,9 @@ async fn complete_order_and_queue_email(
             "[ORDERS] ({source}) no order record found for {paypal_order_id} — was insert_order run?"
         ),
         Ok(_) => println!("[ORDERS] ({source}) {paypal_order_id} → COMPLETED"),
-        Err(error) => eprintln!(
-            "[ORDERS] ({source}) failed to mark {paypal_order_id} COMPLETED: {error}"
-        ),
+        Err(error) => {
+            eprintln!("[ORDERS] ({source}) failed to mark {paypal_order_id} COMPLETED: {error}")
+        }
     }
 
     match supabase.claim_email_send(paypal_order_id).await {
@@ -152,9 +152,9 @@ async fn complete_order_and_queue_email(
         Ok(None) => println!(
             "[EMAIL] ({source}) skipping email for {paypal_order_id}: already sent or no order record"
         ),
-        Err(error) => eprintln!(
-            "[EMAIL] ({source}) could not claim email for {paypal_order_id}: {error}"
-        ),
+        Err(error) => {
+            eprintln!("[EMAIL] ({source}) could not claim email for {paypal_order_id}: {error}")
+        }
     }
 }
 
@@ -383,18 +383,29 @@ pub async fn paypal_webhook(
     // 1. Parse the raw body, keeping the exact bytes for signature checks.
     let text = match std::str::from_utf8(&body) {
         Ok(text) => text,
-        Err(_) => return error_response(actix_web::http::StatusCode::BAD_REQUEST, "Body must be UTF-8 JSON."),
+        Err(_) => {
+            return error_response(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                "Body must be UTF-8 JSON.",
+            );
+        }
     };
     let raw_event: &RawValue = match serde_json::from_str(text) {
         Ok(raw) => raw,
         Err(_) => {
-            return error_response(actix_web::http::StatusCode::BAD_REQUEST, "Body must be valid JSON.");
+            return error_response(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                "Body must be valid JSON.",
+            );
         }
     };
     let event: Value = match serde_json::from_str(text) {
         Ok(value) => value,
         Err(_) => {
-            return error_response(actix_web::http::StatusCode::BAD_REQUEST, "Body must be valid JSON.");
+            return error_response(
+                actix_web::http::StatusCode::BAD_REQUEST,
+                "Body must be valid JSON.",
+            );
         }
     };
 
@@ -407,13 +418,8 @@ pub async fn paypal_webhook(
     };
 
     // 3. Verify the signature (mock-accepts while PAYPAL_WEBHOOK_ID is unset).
-    match paypal::verify_webhook_signature(
-        &paypal_client,
-        &settings,
-        &signature_headers,
-        raw_event,
-    )
-    .await
+    match paypal::verify_webhook_signature(&paypal_client, &settings, &signature_headers, raw_event)
+        .await
     {
         Ok(true) => {}
         Ok(false) => {
@@ -449,13 +455,8 @@ pub async fn paypal_webhook(
 
             match order_id {
                 Some(order_id) => {
-                    complete_order_and_queue_email(
-                        &supabase,
-                        &email_config,
-                        order_id,
-                        "webhook",
-                    )
-                    .await;
+                    complete_order_and_queue_email(&supabase, &email_config, order_id, "webhook")
+                        .await;
                     HttpResponse::Ok().json(json!({
                         "status": "processed",
                         "paypal_order_id": order_id,
@@ -483,6 +484,32 @@ pub async fn paypal_webhook(
             HttpResponse::Ok().json(json!({ "status": "ignored" }))
         }
     }
+}
+#[get("/api/email/network-test")]
+pub async fn email_network_test() -> impl Responder {
+    use std::time::Duration;
+    use tokio::net::TcpStream;
+    use tokio::time::timeout;
+
+    for port in [465, 587] {
+        let address = format!("smtp.resend.com:{port}");
+
+        match timeout(Duration::from_secs(10), TcpStream::connect(&address)).await {
+            Ok(Ok(_)) => {
+                println!("[EMAIL NETWORK TEST] {address} -> CONNECTED");
+            }
+            Ok(Err(error)) => {
+                println!("[EMAIL NETWORK TEST] {address} -> ERROR: {error}");
+            }
+            Err(_) => {
+                println!("[EMAIL NETWORK TEST] {address} -> TIMEOUT");
+            }
+        }
+    }
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "status": "completed"
+    }))
 }
 
 // =============================================================

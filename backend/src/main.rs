@@ -7,7 +7,9 @@ use backend::config::Settings;
 use backend::feedback::create_feedback;
 use backend::paypal_client::PayPalClient;
 use backend::services::email::EmailConfig;
-use backend::services::{capture_paypal_order, create_paypal_order, paypal_webhook, send_test_email};
+use backend::services::{
+    capture_paypal_order, create_paypal_order, email_network_test, paypal_webhook, send_test_email,
+};
 use backend::supabase_client::SupabaseClient;
 
 // =============================================================
@@ -43,7 +45,9 @@ async fn main() -> Result<(), std::io::Error> {
             email_config.port()
         );
     } else {
-        println!("[MOCK EMAIL] SMTP not configured (SMTP_PASSWORD / SENDER_EMAIL placeholder) — thank-you emails will be logged to stdout");
+        println!(
+            "[MOCK EMAIL] SMTP not configured (SMTP_PASSWORD / SENDER_EMAIL placeholder) — thank-you emails will be logged to stdout"
+        );
     }
     let email_config_data = web::Data::new(email_config);
 
@@ -69,6 +73,7 @@ async fn main() -> Result<(), std::io::Error> {
             .service(paypal_webhook)
             .service(send_test_email)
             .service(create_feedback)
+            .service(email_network_test)
     })
     .bind((host, port))?
     .run()
