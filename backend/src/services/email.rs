@@ -123,12 +123,21 @@ pub async fn send_thank_you_email(
 
     // SMTP blocking I/O runs off the async runtime.
     tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let transport = SmtpTransport::starttls_relay(&server)
-            .map_err(|error| format!("SMTP setup failed: {error}"))?
-            .port(port)
-            .credentials(Credentials::new(username, password))
-            .timeout(Some(Duration::from_secs(15)))
-            .build();
+        let transport = if port == 465 {
+            SmtpTransport::relay(&server)
+                .map_err(|error| format!("SMTP setup failed: {error}"))?
+                .port(port)
+                .credentials(Credentials::new(username, password))
+                .timeout(Some(Duration::from_secs(15)))
+                .build()
+        } else {
+            SmtpTransport::starttls_relay(&server)
+                .map_err(|error| format!("SMTP setup failed: {error}"))?
+                .port(port)
+                .credentials(Credentials::new(username, password))
+                .timeout(Some(Duration::from_secs(15)))
+                .build()
+        };
 
         transport
             .send(&message)
