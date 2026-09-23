@@ -4,8 +4,17 @@ import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 import "./index.css";
 import App from "./App.tsx";
 
+const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
+if (!paypalClientId) {
+    // Fail loudly instead of silently falling back to PayPal's "test" client id,
+    // which would make checkout appear broken in live mode.
+    throw new Error(
+        "VITE_PAYPAL_CLIENT_ID is not set — check the env vars in Vercel (or frontend/.env for local dev).",
+    );
+}
+
 const paypalOptions = {
-    "clientId": import.meta.env.VITE_PAYPAL_CLIENT_ID || "test",
+    "clientId": paypalClientId,
     "currency": "USD",
     "intent": "capture"
 };

@@ -44,11 +44,13 @@ pub struct OrderCaptureResponse {
 
 impl PayPalClient {
     pub fn new(settings: &Settings) -> Self {
-        let base_url = if settings.paypal_mode.to_lowercase() == "live" {
-            "https://api-m.paypal.com".to_string()
-        } else {
-            "https://api-m.sandbox.paypal.com".to_string()
+        let mode = settings.paypal_mode.trim().to_lowercase();
+        let base_url = match mode.as_str() {
+            "live" | "production" => "https://api-m.paypal.com".to_string(),
+            "sandbox" | "test" => "https://api-m.sandbox.paypal.com".to_string(),
+            other => panic!("PAYPAL_MODE must be \"live\" or \"sandbox\", got: \"{other}\""),
         };
+        println!("PayPal mode: {mode} -> {base_url}");
 
         let mut headers = header::HeaderMap::new();
         headers.insert(

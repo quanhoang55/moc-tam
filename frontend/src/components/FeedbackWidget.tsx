@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { apiPost } from "../lib/api";
+import { icon } from "../lib/icons";
 
 const MAX_TOPIC_LENGTH = 100;
 const MAX_CONTENT_LENGTH = 5_000;
@@ -28,7 +29,11 @@ export function FeedbackWidget() {
         onClick={() => setIsOpen(true)}
         aria-haspopup="dialog"
       >
-        <span aria-hidden="true">✎</span>
+        <span
+          className="chat-icon"
+          aria-hidden="true"
+          dangerouslySetInnerHTML={{ __html: icon("chat") }}
+        />
         Feedback
       </button>
       {isOpen && <FeedbackModal onClose={() => setIsOpen(false)} />}
@@ -72,7 +77,7 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
       );
 
       if (result.status !== "success") {
-        throw new Error(result.message ?? "Không thể gửi góp ý lúc này.");
+        throw new Error(result.message ?? "Couldn't send your feedback right now.");
       }
 
       setSuccessMessage(result.message);
@@ -80,7 +85,7 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
       setContent("");
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "Không thể gửi góp ý lúc này.",
+        error instanceof Error ? error.message : "Couldn't send your feedback right now.",
       );
     } finally {
       setIsSubmitting(false);
@@ -98,10 +103,10 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
       >
         <div className="feedback-modal-head">
           <div>
-            <p>Chia sẻ cùng Mộc Tâm</p>
+            <p>Share your thoughts with Mộc Tâm</p>
             <h2 id="feedback-title">Feedback</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="Đóng biểu mẫu feedback">
+          <button type="button" onClick={onClose} aria-label="Close feedback form">
             ×
           </button>
         </div>
@@ -110,26 +115,30 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
           <div className="feedback-success" role="status">
             <span aria-hidden="true">✓</span>
             <h3>{successMessage}</h3>
-            <p>Ý kiến của bạn giúp Mộc Tâm phục vụ tốt hơn mỗi ngày.</p>
-            <button type="button" onClick={onClose}>Đóng</button>
+            <p>Your feedback helps Mộc Tâm serve you better every day.</p>
+            <button type="button" onClick={onClose}>
+              Close
+            </button>
           </div>
         ) : (
           <form onSubmit={submitFeedback}>
-            <label htmlFor="feedback-topic">Chủ đề</label>
-            <p className="field-note">Một chủ đề ngắn giúp chúng tôi phân loại góp ý.</p>
+            <label htmlFor="feedback-topic">Topic</label>
+            <p className="field-note">A short topic helps us route your feedback.</p>
             <input
               ref={topicInput}
               id="feedback-topic"
               value={topic}
               onChange={(event) => setTopic(event.target.value)}
               maxLength={MAX_TOPIC_LENGTH}
-              placeholder="Ví dụ: Trải nghiệm mua hàng"
+              placeholder="e.g. Shopping experience"
               required
             />
 
             <div className="feedback-content-label">
-              <label htmlFor="feedback-content">Nội dung</label>
-              <span aria-live="polite">{content.length} / {MAX_CONTENT_LENGTH}</span>
+              <label htmlFor="feedback-content">Content</label>
+              <span aria-live="polite">
+                {content.length} / {MAX_CONTENT_LENGTH}
+              </span>
             </div>
             <textarea
               id="feedback-content"
@@ -137,16 +146,22 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
               onChange={(event) => setContent(event.target.value)}
               maxLength={MAX_CONTENT_LENGTH}
               rows={7}
-              placeholder="Hãy chia sẻ điều bạn yêu thích hoặc mong muốn Mộc Tâm cải thiện..."
+              placeholder="Tell us what you liked or what you'd like Mộc Tâm to improve..."
               required
             />
 
-            {errorMessage && <p className="feedback-error" role="alert">{errorMessage}</p>}
+            {errorMessage && (
+              <p className="feedback-error" role="alert">
+                {errorMessage}
+              </p>
+            )}
 
             <div className="feedback-actions">
-              <button type="button" onClick={onClose}>Hủy</button>
+              <button type="button" onClick={onClose}>
+                Cancel
+              </button>
               <button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Đang gửi..." : "Gửi feedback"}
+                {isSubmitting ? "Sending..." : "Send feedback"}
               </button>
             </div>
           </form>

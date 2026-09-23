@@ -1,85 +1,117 @@
-import type { ReactNode } from "react";
-import { tabs, type Tab } from "../data/navigation";
+import { useEffect, useRef } from "react";
+import { NAV_ITEMS, type NavKey } from "../data/navigation";
+import { icon } from "../lib/icons";
 
-export type { Tab } from "../data/navigation";
-
-export function SiteHeader({
-  activeTab,
-  cartCount,
-  onTab,
-  onCart,
-}: {
-  activeTab: Tab;
+interface SiteHeaderProps {
+  active: NavKey | null;
   cartCount: number;
-  onTab: (tab: Tab) => void;
-  onCart: () => void;
-}) {
-  return (
-    <header className="topbar">
-      <button className="icon-button menu" aria-label="Mở menu">
-        ☰
-      </button>
-      <button className="brand" onClick={() => onTab("Trang chủ")}>
-        <img src="/images_new/moc-tam-logo.png" alt="Mộc Tâm" />
-        <span>Trà thảo mộc, sống chậm</span>
-      </button>
-      <nav>
-        {tabs.map((tab) => (
-          <button
-            className={activeTab === tab ? "active" : ""}
-            key={tab}
-            onClick={() => onTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </nav>
-      <div className="top-actions">
-        <button
-          className="icon-button"
-          aria-label="Mở danh mục"
-          onClick={() => onTab("Danh mục")}
-        >
-          ⌕
-        </button>
-        <button
-          className="cart-button"
-          aria-label="Mở giỏ hàng"
-          onClick={onCart}
-        >
-          ♧ {cartCount > 0 && <b>{cartCount}</b>}
-        </button>
-      </div>
-    </header>
-  );
+  menuOpen: boolean;
+  searchOpen: boolean;
+  onNavigate: (key: NavKey) => void;
+  onOpenMenu: () => void;
+  onToggleSearch: (open: boolean) => void;
+  onOpenCart: () => void;
 }
 
-export function MobileTabs({
-  activeTab,
-  onTab,
-}: {
-  activeTab: Tab;
-  onTab: (tab: Tab) => void;
-}) {
-  const icons: Record<Tab, ReactNode> = {
-    "Trang chủ": "⌂",
-    "Danh mục": "⊞",
-    "Yêu thích": "♡",
-    "Đơn hàng": "♧",
-    "Tài khoản": "♙",
-  };
+export function SiteHeader({
+  active,
+  cartCount,
+  menuOpen,
+  searchOpen,
+  onNavigate,
+  onOpenMenu,
+  onToggleSearch,
+  onOpenCart,
+}: SiteHeaderProps) {
+  const searchInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (searchOpen) searchInput.current?.focus();
+  }, [searchOpen]);
+
   return (
-    <div className="mobile-tabs">
-      {tabs.map((tab) => (
+    <header className="site-header">
+      <div className="header-inner">
         <button
-          className={activeTab === tab ? "active" : ""}
-          key={tab}
-          onClick={() => onTab(tab)}
+          className="icon-button menu-toggle"
+          type="button"
+          aria-label="Menu"
+          aria-expanded={menuOpen}
+          onClick={onOpenMenu}
+          dangerouslySetInnerHTML={{ __html: icon("hamburger") }}
+        />
+        <nav className="desktop-nav" aria-label="Primary navigation">
+          {NAV_ITEMS.map((item) => (
+            <a
+              key={item.key}
+              data-nav={item.key}
+              href="#"
+              className={active === item.key ? "active" : undefined}
+              aria-current={active === item.key ? "page" : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                onNavigate(item.key);
+              }}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+        <a
+          className="brand"
+          href="#"
+          aria-label="Mộc Tâm"
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigate("shop");
+          }}
         >
-          <span>{icons[tab]}</span>
-          {tab}
-        </button>
-      ))}
-    </div>
+          <img src="/assets/images/moc-tam-logo.png" alt="Mộc Tâm" />
+        </a>
+        <div className="header-tools">
+          <button
+            className="icon-button search-toggle"
+            type="button"
+            aria-label="Search"
+            onClick={() => onToggleSearch(!searchOpen)}
+            dangerouslySetInnerHTML={{ __html: icon("search") }}
+          />
+          <a
+            className="login-link"
+            href="#footer"
+            dangerouslySetInnerHTML={{ __html: icon("account") + "Log in" }}
+          />
+          <button
+            className="icon-button cart-toggle"
+            type="button"
+            aria-label={`Cart ${cartCount} items`}
+            onClick={onOpenCart}
+            dangerouslySetInnerHTML={{
+              __html:
+                icon("cart") + `<span class="cart-count">${cartCount}</span>`,
+            }}
+          />
+        </div>
+      </div>
+      <div
+        className={`search-panel${searchOpen ? " is-open" : ""}`}
+        aria-hidden={!searchOpen}
+      >
+        <label htmlFor="search-input">Search</label>
+        <input
+          id="search-input"
+          type="search"
+          placeholder="Search"
+          ref={searchInput}
+        />
+        <button
+          className="search-close icon-button"
+          type="button"
+          aria-label="Close search"
+          onClick={() => onToggleSearch(false)}
+          dangerouslySetInnerHTML={{ __html: icon("close") }}
+        />
+      </div>
+    </header>
   );
 }
