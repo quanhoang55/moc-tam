@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 // =============================================================
 // PURPOSE: Post-purchase email (SMTP / Resend) with mock fallback
 //
@@ -11,7 +13,6 @@ use lettre::Message;
 use lettre::Transport;
 use lettre::transport::smtp::SmtpTransport;
 use lettre::transport::smtp::authentication::Credentials;
-use lettre::transport::smtp::client::{Tls, TlsParameters};
 
 #[derive(Debug, Clone)]
 pub struct EmailConfig {
@@ -102,10 +103,15 @@ pub async fn send_thank_you_email(
     let order_id = order_id.to_owned();
 
     let message = Message::builder()
-        .from(config.sender.parse().map_err(|error| {
-            format!("Invalid SENDER_EMAIL `{}`: {error}", config.sender)
-        })?)
-        .to(to.parse().map_err(|error| format!("Invalid recipient email `{to}`: {error}"))?)
+        .from(
+            config
+                .sender
+                .parse()
+                .map_err(|error| format!("Invalid SENDER_EMAIL `{}`: {error}", config.sender))?,
+        )
+        .to(to
+            .parse()
+            .map_err(|error| format!("Invalid recipient email `{to}`: {error}"))?)
         .subject(subject)
         .body(body)
         .map_err(|error| format!("Failed to build email message: {error}"))?;
@@ -117,23 +123,12 @@ pub async fn send_thank_you_email(
 
     // SMTP blocking I/O runs off the async runtime.
     tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let tls = if port == 465 {
-            let tls_parameters = TlsParameters::new(server.clone())
-                .map_err(|error| format!("TLS setup failed: {error}"))?;
-            Tls::Wrapper(tls_parameters)
-        } else {
-            Tls::Required(TlsParameters::new(server.clone()).map_err(|error| {
-                format!("TLS setup failed: {error}")
-            })?)
-        };
-
-        let mut builder = SmtpTransport::builder_dangerous(&server)
+        let transport = SmtpTransport::starttls_relay(&server)
+            .map_err(|error| format!("SMTP setup failed: {error}"))?
             .port(port)
-            .tls(tls);
-        if !username.is_empty() {
-            builder = builder.credentials(Credentials::new(username, password));
-        }
-        let transport = builder.build();
+            .credentials(Credentials::new(username, password))
+            .timeout(Some(Duration::from_secs(15)))
+            .build();
 
         transport
             .send(&message)
