@@ -3,6 +3,7 @@ import { money } from "../lib/format";
 import { icon, payment } from "../lib/icons";
 import type { CartLine } from "../types/product";
 import { PayPalCheckoutButton } from "./PayPalCheckoutButton";
+import { apiPost } from "../lib/api";
 
 const CART_PAYMENTS: Array<[string, string]> = [
   ["amex", "American Express"],
@@ -28,6 +29,8 @@ interface CartDrawerProps {
 export function CartDrawer({ open, lines, onClose, onQty, onRemove, onClear }: CartDrawerProps) {
   const [showPayment, setShowPayment] = useState(false);
   const [checkoutEmail, setCheckoutEmail] = useState("");
+  const [testEmailState, setTestEmailState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [testEmailMessage, setTestEmailMessage] = useState("");
 
   const emailValid = EMAIL_PATTERN.test(checkoutEmail.trim());
   const emailTouched = checkoutEmail.length > 0;
@@ -35,6 +38,23 @@ export function CartDrawer({ open, lines, onClose, onQty, onRemove, onClear }: C
   const subtotal = lines.reduce((sum, line) => sum + line.price * line.qty, 0);
   const savings = lines.reduce((sum, line) => sum + (line.regular - line.price) * line.qty, 0);
   const count = lines.reduce((sum, line) => sum + line.qty, 0);
+
+  async function sendTestEmail() {
+    if (!emailValid || testEmailState === "sending") return;
+
+    setTestEmailState("sending");
+    setTestEmailMessage("");
+    try {
+      const response = await apiPost<{ message?: string }>("/api/email/test", {
+        email: checkoutEmail.trim(),
+      });
+      setTestEmailState("sent");
+      setTestEmailMessage(response.message ?? "Test email sent. Please check your inbox.");
+    } catch (error) {
+      setTestEmailState("error");
+      setTestEmailMessage(error instanceof Error ? error.message : "Unable to send the test email.");
+    }
+  }
 
   return (
     <>
@@ -134,7 +154,11 @@ export function CartDrawer({ open, lines, onClose, onQty, onRemove, onClear }: C
                   autoComplete="email"
                   placeholder="you@example.com"
                   value={checkoutEmail}
-                  onChange={(event) => setCheckoutEmail(event.target.value)}
+                  onChange={(event) => {
+                    setCheckoutEmail(event.target.value);
+                    setTestEmailState("idle");
+                    setTestEmailMessage("");
+                  }}
                   aria-invalid={emailTouched && !emailValid}
                 />
                 {emailTouched && !emailValid ? (
@@ -149,22 +173,37 @@ export function CartDrawer({ open, lines, onClose, onQty, onRemove, onClear }: C
               </div>
               {/* Step 2: PayPal only mounts with a valid email + the live total. */}
               {emailValid && (
-                <PayPalCheckoutButton
-                  email={checkoutEmail.trim()}
-                  amount={Number(subtotal.toFixed(2))}
-                  currency="USD"
-                  onSuccess={() => {
-                    alert(
-                      "Payment successful! A confirmation email is on its way.",
-                    );
-                    onClear();
-                    setShowPayment(false);
-                    onClose();
-                  }}
-                  onError={() => {
-                    alert("Payment failed, please try again later.");
-                  }}
-                />
+                <>
+                  <button
+                    className="send-test-email"
+                    type="button"
+                    disabled={testEmailState === "sending"}
+                    onClick={sendTestEmail}
+                  >
+                    {testEmailState === "sending" ? "Sending test email…" : "Send test email"}
+                  </button>
+                  {testEmailMessage && (
+                    <p className={`checkout-email-result checkout-email-result--${testEmailState}`} role="status">
+                      {testEmailMessage}
+                    </p>
+                  )}
+                  <PayPalCheckoutButton
+                    email={checkoutEmail.trim()}
+                    amount={Number(subtotal.toFixed(2))}
+                    currency="USD"
+                    onSuccess={() => {
+                      alert(
+                        "Payment successful! A confirmation email is on its way.",
+                      );
+                      onClear();
+                      setShowPayment(false);
+                      onClose();
+                    }}
+                    onError={() => {
+                      alert("Payment failed, please try again later.");
+                    }}
+                  />
+                </>
               )}
             </div>
           ) : (

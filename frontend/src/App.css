@@ -236,3 +236,25 @@
   font-size: 12.5px;
   letter-spacing: 0.02em;
 }
+.send-test-email {
+  width: 100%;
+  margin: 4px 0 8px;
+  border: 1px solid var(--gold);
+  border-radius: 7px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--gold);
+  font: 700 13px/1 Poppins, sans-serif;
+  letter-spacing: 0.04em;
+}
+.checkout-email-result {
+  margin: -2px 0 8px;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+}
+.checkout-email-result--sent {
+  color: #24723d;
+}
+.checkout-email-result--error {
+  color: #8e1f0b;
+}
