@@ -7,9 +7,7 @@ use backend::config::Settings;
 use backend::feedback::create_feedback;
 use backend::paypal_client::PayPalClient;
 use backend::services::email::EmailConfig;
-use backend::services::{
-    capture_paypal_order, create_paypal_order, email_network_test, paypal_webhook, send_test_email,
-};
+use backend::services::{capture_paypal_order, create_paypal_order, paypal_webhook};
 use backend::supabase_client::SupabaseClient;
 
 // =============================================================
@@ -69,9 +67,7 @@ async fn main() -> Result<(), std::io::Error> {
             .service(create_paypal_order)
             .service(capture_paypal_order)
             .service(paypal_webhook)
-            .service(send_test_email)
             .service(create_feedback)
-            .service(email_network_test)
     })
     .bind((host, port))?
     .run()

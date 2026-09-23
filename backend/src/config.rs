@@ -23,10 +23,6 @@ pub struct Settings {
     pub smtp_password: String,
     pub sender_email: String,
     pub resend_api_key: String,
-    /// Explicit opt-in for the UI's pre-payment email delivery test.
-    /// Keep this disabled in production so this endpoint cannot be used as an
-    /// unauthenticated email relay.
-    pub enable_email_test_endpoint: bool,
     // --- PayPal webhooks ---
     /// May be empty or a placeholder — webhook verification degrades to a mock.
     pub paypal_webhook_id: String,
@@ -77,9 +73,6 @@ impl Settings {
             smtp_password: env::var("SMTP_PASSWORD").unwrap_or_default(),
             sender_email: env::var("SENDER_EMAIL").unwrap_or_default(),
             resend_api_key: env::var("RESEND_API_KEY").unwrap_or_default(),
-            enable_email_test_endpoint: env::var("ENABLE_EMAIL_TEST_ENDPOINT")
-                .map(|value| matches!(value.trim().to_lowercase().as_str(), "1" | "true" | "yes"))
-                .unwrap_or(false),
             paypal_webhook_id: env::var("PAYPAL_WEBHOOK_ID").unwrap_or_default(),
         }
     }
