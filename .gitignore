@@ -1,0 +1,16 @@
+# Local environment files
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Build output and dependencies
+target/
+**/target/
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+
+# Operating system files
+.DS_Store

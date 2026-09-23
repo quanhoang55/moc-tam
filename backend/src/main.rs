@@ -1,0 +1,54 @@
+// =============================================================
+// IMPORTS & MODULE LOADING
+// =============================================================
+use actix_cors::Cors;
+use actix_web::{App, HttpResponse, HttpServer, Responder, get, web};
+use backend::config::Settings;
+use backend::feedback::create_feedback;
+use backend::paypal_client::PayPalClient;
+use backend::services::{capture_paypal_order, create_paypal_order};
+use backend::supabase_client::SupabaseClient;
+
+// =============================================================
+// CORE LOGIC & FUNCTIONS
+// =============================================================
+#[get("/")]
+async fn check_root() -> impl Responder {
+    HttpResponse::Ok().body("Ok!")
+}
+
+#[actix_web::main]
+async fn main() -> Result<(), std::io::Error> {
+    // 1. Initialize Settings from environment
+    let settings = Settings::init();
+    let port = settings.port;
+    let host = settings.host.clone();
+
+    // 2. Instantiate the PayPal Client
+    let paypal_client = PayPalClient::new(&settings);
+    let paypal_client_data = web::Data::new(paypal_client);
+
+    // 3. Instantiate the Supabase client (used by the feedback endpoint)
+    let supabase_client = SupabaseClient::new(&settings);
+    let supabase_client_data = web::Data::new(supabase_client);
+
+    println!("Starting Actix-web server on {}:{}", host, port);
+
+    // 4. Configure HTTP Server
+    HttpServer::new(move || {
+        let cors = Cors::permissive();
+        App::new()
+            .wrap(cors)
+            // Inject PayPal client into application state
+            .app_data(paypal_client_data.clone())
+            .app_data(supabase_client_data.clone())
+            // Register routes
+            .service(check_root)
+            .service(create_paypal_order)
+            .service(capture_paypal_order)
+            .service(create_feedback)
+    })
+    .bind((host, port))?
+    .run()
+    .await
+}
