@@ -163,18 +163,8 @@ impl PayPalClient {
             .map_err(|e| format!("Failed to send create order request: {}", e))?;
 
         if !response.status().is_success() {
-            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-
-            println!("========== PAYPAL CREATE ORDER ERROR ==========");
-            println!("PayPal status: {}", status);
-            println!("PayPal response: {}", error_text);
-            println!("===============================================");
-
-            return Err(format!(
-                "PayPal Create Order Error ({}): {}",
-                status, error_text
-            ));
+            return Err(format!("PayPal Create Order Error: {}", error_text));
         }
 
         let order_res: OrderCreateResponse = response
